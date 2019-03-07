@@ -117,7 +117,7 @@ open class SideMenuController: UIViewController {
     private weak var contentContainerOverlay: UIView?
 
     // The pan gesture recognizer responsible for revealing and hiding side menu
-    private weak var panGestureRecognizer: UIPanGestureRecognizer?
+    public private(set) weak var menuGestureRecognizer: UIScreenEdgePanGestureRecognizer?
 
     var shouldReverseDirection: Bool {
         guard preferences.basic.shouldRespectLanguageDirection else {
@@ -271,7 +271,6 @@ open class SideMenuController: UIViewController {
                 if reveal {
                     self.delegate?.sideMenuControllerDidRevealMenu(self)
                 } else {
-                    self.delegate?.sideMenuControllerDidHideMneu(self)
                     self.delegate?.sideMenuControllerDidHideMenu(self)
                 }
             }
@@ -335,10 +334,11 @@ open class SideMenuController: UIViewController {
 
     private func configureGesturesRecognizer() {
         // The gesture will be added anyway, its delegate will tell whether it should be recognized
-        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(SideMenuController.handlePanGesture(_:)))
-        panGesture.delegate = self
-        panGestureRecognizer = panGesture
-        view.addGestureRecognizer(panGesture)
+        let screenEdgeGesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(SideMenuController.handlePanGesture(_:)))
+        screenEdgeGesture.edges = adjustedDirection == .left ? .left : .right
+        screenEdgeGesture.delegate = self
+        menuGestureRecognizer = screenEdgeGesture
+        view.addGestureRecognizer(screenEdgeGesture)
     }
 
     private func addContentOverlayViewIfNeeded() {
@@ -725,50 +725,23 @@ extension SideMenuController: UIGestureRecognizerDelegate {
             return false
         }
 
-        if touch.view is UISlider {
-            return false
-        }
-
-        // If the view is scrollable in horizon direciton, don't receive the touch
-        if let scrollView = touch.view as? UIScrollView, scrollView.frame.width > scrollView.contentSize.width {
-            return false
-        }
-
         return true
     }
-
-    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if let velocity = panGestureRecognizer?.velocity(in: view) {
-            return isValidateHorizontalMovement(for: velocity)
-        }
-        return true
-    }
-
+    
     private func isViewControllerInsideNavigationStack(for view: UIView?) -> Bool {
-        guard let view = view,
+        guard
+            let view = view,
             let viewController = view.parentViewController,
-            !(viewController is UINavigationController),
-            let navigationController = viewController.navigationController else {
+            (viewController is UINavigationController) == false,
+            let navigationController = viewController.navigationController
+            else {
                 return false
         }
-
-        if let index = navigationController.viewControllers.index(of: viewController) {
-            return index > 0
-        }
-        return false
-    }
-
-    private func isValidateHorizontalMovement(for velocity: CGPoint) -> Bool {
-        if isMenuRevealed {
-            return true
-        }
-
-        let direction = preferences.basic.direction
-        var factor: CGFloat = direction == .left ? 1 : -1
-        factor *= shouldReverseDirection ? -1 : 1
-        guard velocity.x * factor > 0 else {
+        
+        guard let index = navigationController.viewControllers.index(of: viewController) else {
             return false
         }
-        return abs(velocity.y / velocity.x) < 0.25
+        
+        return index > 0
     }
 }
